@@ -4,11 +4,30 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"startnow/internal/installer"
 )
 
+func normalizeVersion(t *Tool, v string) string {
+	if v == "" {
+		return ""
+	}
+	switch t.Source {
+	case SourceGoDev:
+		if !strings.HasPrefix(v, "go") {
+			return "go" + v
+		}
+	case SourceNodeJS, SourceGitHub:
+		if !strings.HasPrefix(v, "v") {
+			return "v" + v
+		}
+	}
+	return v
+}
+
 func Install(t *Tool, env *installer.Env) error {
+	t.Version = normalizeVersion(t, t.Version)
 	switch t.Kind {
 	case KindArchive:
 		return installArchive(t, env)

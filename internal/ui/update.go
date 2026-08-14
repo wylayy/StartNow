@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -15,9 +16,9 @@ func waitForEvents(ch chan installer.Event) tea.Cmd {
 	return func() tea.Msg { return <-ch }
 }
 
-func tick() tea.Cmd {
+func tick(d time.Duration) tea.Cmd {
 	return func() tea.Msg {
-		time.Sleep(120 * time.Millisecond)
+		time.Sleep(d)
 		return tickMsg{}
 	}
 }
@@ -29,7 +30,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.spin++
 		if m.screen == screenInstall {
-			return m, tick()
+			return m, tick(120 * time.Millisecond)
+		}
+		if m.tab == tabUsage {
+			m.usage = m.sampler.Sample()
+			return m, tick(time.Second)
 		}
 	case tea.KeyPressMsg:
 		if m.quitting {
@@ -40,10 +45,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		}
-		if m.screen == screenList {
+		if m.screen == screenInstall {
+			return m.updateInstallKey(msg)
+		}
+		if m.tab == tabTools && m.verActive {
 			return m.updateListKey(msg)
 		}
-		return m.updateInstallKey(msg)
+		switch msg.String() {
+		case "tab":
+			m.tab = (m.tab + 1) % 3
+			m.tabScroll = 0
+		case "shift+tab":
+			m.tab = (m.tab + 2) % 3
+			m.tabScroll = 0
+		case "1":
+			m.tab = tabTools
+			m.tabScroll = 0
+		case "2":
+			m.tab = tabMachine
+			m.tabScroll = 0
+		case "3":
+			m.tab = tabUsage
+			m.tabScroll = 0
+		}
+		if m.tab == tabTools {
+			return m.updateListKey(msg)
+		}
+		return m.updateScrollKey(msg)
 	case installer.Event:
 		return m.updateEvent(msg)
 	}
@@ -51,6 +79,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateListKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.verActive {
+		return m.updateVersionKey(k)
+	}
 	switch k.String() {
 	case "up", "k":
 		if m.cursor > 0 {
@@ -79,6 +110,10 @@ func (m Model) updateListKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.selected[t.Name] = true
 			}
 		}
+	case "v":
+		m.verTool = m.cursor
+		m.verBuf = m.version[m.tools[m.cursor].Name]
+		m.verActive = true
 	case "enter":
 		var chosen []catalog.Tool
 		for _, t := range m.tools {
@@ -96,6 +131,46 @@ func (m Model) updateListKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			go m.runInstall(t)
 		}
 		return m, waitForEvents(m.events)
+	}
+	return m, nil
+}
+
+func (m Model) updateVersionKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "enter":
+		name := m.tools[m.verTool].Name
+		m.version[name] = strings.TrimSpace(m.verBuf)
+		m.verActive = false
+	case "esc", "\x1b":
+		m.verActive = false
+	case "backspace", "\b":
+		if len(m.verBuf) > 0 {
+			m.verBuf = m.verBuf[:len(m.verBuf)-1]
+		}
+	case "space":
+		m.verBuf += " "
+	default:
+		for _, r := range k.Text {
+			if r >= 32 {
+				m.verBuf += string(r)
+			}
+		}
+	}
+	return m, nil
+}
+
+func (m Model) updateScrollKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "up", "k":
+		if m.tabScroll > 0 {
+			m.tabScroll--
+		}
+	case "down", "j":
+		m.tabScroll++
+	case "g":
+		m.tabScroll = 0
+	case "G":
+		m.tabScroll = 1 << 30
 	}
 	return m, nil
 }
@@ -164,7 +239,7 @@ func (m *Model) clampScroll() {
 }
 
 func (m Model) visibleRows() int {
-	rows := m.height - 6
+	rows := m.height - headerLines - 2
 	if rows < 3 {
 		rows = 3
 	}

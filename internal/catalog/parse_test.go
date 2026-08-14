@@ -99,6 +99,29 @@ func TestExpand(t *testing.T) {
 	}
 }
 
+func TestNormalizeVersion(t *testing.T) {
+	cases := []struct {
+		tool Tool
+		in   string
+		want string
+	}{
+		{Tool{Source: SourceGoDev}, "1.27.4", "go1.27.4"},
+		{Tool{Source: SourceGoDev}, "go1.26.5", "go1.26.5"},
+		{Tool{Source: SourceNodeJS}, "24.19.0", "v24.19.0"},
+		{Tool{Source: SourceNodeJS}, "v23.4.0", "v23.4.0"},
+		{Tool{Source: SourceGitHub}, "0.64.1", "v0.64.1"},
+		{Tool{Source: SourceGitHub}, "v0.63.0", "v0.63.0"},
+		{Tool{Source: SourceGoDev}, "", ""},
+		{Tool{Source: SourceNodeJS}, "", ""},
+		{Tool{Kind: KindScript, Source: ""}, "1.2.3", "1.2.3"},
+	}
+	for _, c := range cases {
+		if got := normalizeVersion(&c.tool, c.in); got != c.want {
+			t.Errorf("normalizeVersion(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestValidateAll(t *testing.T) {
 	if err := ValidateAll(); err != nil {
 		t.Errorf("catalog invalid: %v", err)

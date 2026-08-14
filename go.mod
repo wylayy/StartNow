@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	charm.land/bubbletea/v2 v2.0.8
+	charm.land/lipgloss/v2 v2.0.6
 	github.com/ulikunitz/xz v0.5.16
 )
 

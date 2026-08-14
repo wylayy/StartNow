@@ -3,6 +3,7 @@ package ui
 import (
 	"startnow/internal/catalog"
 	"startnow/internal/installer"
+	"startnow/internal/machine"
 )
 
 type screen int
@@ -10,6 +11,14 @@ type screen int
 const (
 	screenList screen = iota
 	screenInstall
+)
+
+type tab int
+
+const (
+	tabTools tab = iota
+	tabMachine
+	tabUsage
 )
 
 type toolState struct {
@@ -41,9 +50,20 @@ type Model struct {
 	tools    []catalog.Tool
 	state    map[string]toolState
 	selected map[string]bool
+	version  map[string]string
 
-	cursor int
-	scroll int
+	cursor    int
+	scroll    int
+	tab       tab
+	tabScroll int
+
+	verTool   int
+	verBuf    string
+	verActive bool
+
+	machine machine.Info
+	sampler *machine.Sampler
+	usage   machine.Usage
 
 	screen screen
 	jobs   map[string]*job
@@ -60,9 +80,13 @@ func NewModel(env *installer.Env) Model {
 		tools:    catalog.Tools(),
 		state:    map[string]toolState{},
 		selected: map[string]bool{},
+		version:  map[string]string{},
 		jobs:     map[string]*job{},
+		machine:  machine.Collect(),
+		sampler:  machine.NewSampler(),
 	}
 	env.Send = func(ev installer.Event) { m.events <- ev }
+	m.usage = m.sampler.Sample()
 	m.probeAll()
 	return m
 }
@@ -78,6 +102,7 @@ func (m *Model) probeAll() {
 }
 
 func (m *Model) runInstall(t catalog.Tool) {
+	t.Version = m.version[t.Name]
 	if err := catalog.Install(&t, m.env); err != nil {
 		m.env.Send(installer.Event{Tool: t.Name, Step: installer.StepFailed, Message: err.Error()})
 		return
