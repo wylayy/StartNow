@@ -1,0 +1,60 @@
+.TH STARTNOW 1 "August 2026" "startnow 0.1.0" "User Commands"
+.SH NAME
+startnow \- Ninite-style developer tool installer for Linux
+.SH SYNOPSIS
+.B startnow
+.SH DESCRIPTION
+.B startnow
+is a terminal UI installer for developer tools. Select tools from the
+catalog, and it downloads, verifies (sha256) and installs them reliably.
+Supported install styles: direct archives from official sources, official
+installer scripts, and native system packages via the distro's package
+manager (APT, DNF, Pacman, Zypper, APK).
+.SH TABS
+Tools, Machine, Usage. Switch with TAB or 1-3, or click the tab pills.
+.SH KEYS
+.TP
+.B up/down, j/k
+move in the tools table
+.TP
+.B space
+toggle selection
+.TP
+.B a
+select all / clear
+.TP
+.B /
+focus the filter (or click it)
+.TP
+.B v
+set a pinned version
+.TP
+.B u
+check for / install updates
+.TP
+.B x
+uninstall a managed tool
+.TP
+.B i
+tool details (or right-click a row)
+.TP
+.B enter
+install selected tools
+.TP
+.B ?
+full help
+.TP
+.B q, ctrl+c
+quit
+.SH FILES
+.TP
+.I ~/.startnow/bin
+symlinks to installed binaries; add to PATH
+.TP
+.I ~/.startnow/manifest.json
+tools installed by startnow and their versions
+.TP
+.I ~/.cache/startnow
+downloaded archives
+.SH SEE ALSO
+Go (https://go.dev), Bubble Tea (https://github.com/charmbracelet/bubbletea)

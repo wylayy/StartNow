@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=StartNow
+Comment=Ninite-style developer tool installer for Linux
+Exec=startnow
+Terminal=true
+Type=Application
+Categories=Development;Utility;
+Icon=startnow

@@ -54,6 +54,21 @@ Add `~/.startnow/bin` to your PATH:
 export PATH="$HOME/.startnow/bin:$PATH"
 ```
 
+## Native Packages
+
+Build a Debian package (Debian/Ubuntu/Mint, amd64 or arm64):
+
+```sh
+make deb VERSION=0.1.0
+# built dist/startnow_0.1.0_amd64.deb
+sudo apt install ./dist/startnow_0.1.0_amd64.deb
+```
+
+The package is a static, dependency-free binary installed to `/usr/bin/startnow`
+(so it works on PATH out of the box), plus a man page, desktop entry and icon.
+Other formats: build an RPM with `fpm -s dir -t rpm`, or write a PKGBUILD
+(`pkgver=0.1.0`, `arch=('x86_64')`, `make deb` layout) for Arch.
+
 ## Keys
 
 | Key          | Action                                  |
