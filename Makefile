@@ -1,4 +1,4 @@
-.PHONY: build run fmt vet tidy
+.PHONY: build run fmt vet test tidy
 
 build:
 	go build -o bin/startnow ./cmd/startnow
@@ -11,6 +11,9 @@ fmt:
 
 vet:
 	go vet ./...
+
+test:
+	go test ./...
 
 tidy:
 	go mod tidy

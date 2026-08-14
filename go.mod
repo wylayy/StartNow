@@ -2,7 +2,10 @@ module startnow
 
 go 1.26.5
 
-require charm.land/bubbletea/v2 v2.0.8
+require (
+	charm.land/bubbletea/v2 v2.0.8
+	github.com/ulikunitz/xz v0.5.16
+)
 
 require (
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
