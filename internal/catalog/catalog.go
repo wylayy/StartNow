@@ -70,6 +70,7 @@ func Tools() []Tool {
 			VersionCmd: []string{"go", "version"},
 			Kind:       KindArchive, Source: SourceGoDev,
 			ArchiveURL: "https://go.dev/dl/{{.Asset}}",
+			BinRel:     "bin",
 		},
 		{
 			Name: "node", DisplayName: "Node.js", Category: "Runtimes", Description: "JavaScript runtime (LTS)",

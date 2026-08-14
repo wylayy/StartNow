@@ -77,6 +77,8 @@ type Model struct {
 	downloadURL map[string]string
 	resolving   map[string]bool
 
+	onPath bool
+
 	tooSmall bool
 
 	tab tab
@@ -111,6 +113,7 @@ func NewModel(env *installer.Env) Model {
 		sampler:     machine.NewSampler(),
 	}
 	env.Send = func(ev installer.Event) { m.events <- ev }
+	m.onPath = env.OnPath()
 	if manifest, err := env.LoadManifest(); err == nil {
 		for name, entry := range manifest.Installs {
 			m.managed[name] = true

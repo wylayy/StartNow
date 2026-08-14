@@ -242,6 +242,9 @@ func (e *Env) LinkIntoBin(tool, dir string) error {
 		linked++
 	}
 	e.Report(tool, StepDone, 1, fmt.Sprintf("linked %d binaries into %s", linked, e.BinDir))
+	if linked == 0 {
+		return fmt.Errorf("no executable binaries found in %s", dir)
+	}
 	return nil
 }
 
@@ -304,10 +307,12 @@ func (e *Env) runStreamed(tool, name string, args, extraEnv []string) error {
 }
 
 func (e *Env) Probe(name string, args ...string) (string, bool) {
-	bin, err := exec.LookPath(name)
-	if err != nil {
-		bin = filepath.Join(e.BinDir, name)
-		if _, statErr := os.Stat(bin); statErr != nil {
+	// Prefer StartNow's own installs so the status column reflects the
+	// managed version, falling back to whatever is on PATH.
+	bin := filepath.Join(e.BinDir, name)
+	if _, err := os.Stat(bin); err != nil {
+		bin, err = exec.LookPath(name)
+		if err != nil {
 			return "", false
 		}
 	}
@@ -321,6 +326,16 @@ func (e *Env) Probe(name string, args ...string) (string, bool) {
 		return "installed", true
 	}
 	return v, true
+}
+
+// OnPath reports whether BinDir is listed in the user's PATH.
+func (e *Env) OnPath() bool {
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if dir == e.BinDir {
+			return true
+		}
+	}
+	return false
 }
 
 func ExtractFilename(url string) string {

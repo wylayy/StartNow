@@ -365,7 +365,11 @@ func (m Model) listView() string {
 	rows = append(rows, indicator+m.filterInput.View())
 	rows = append(rows, m.table.View())
 	rows = append(rows, styleDim.Render(fmt.Sprintf("%d/%d selected", len(m.selected), len(m.tools))))
-	rows = append(rows, styleDim.Render("Binaries go to ~/.startnow/bin — add it to your PATH"))
+	if m.onPath {
+		rows = append(rows, styleDim.Render("Binaries go to ~/.startnow/bin"))
+	} else {
+		rows = append(rows, styleWarn.Render("~/.startnow/bin is NOT on PATH — export PATH=\"$HOME/.startnow/bin:$PATH\""))
+	}
 	if m.notice != "" {
 		rows = append(rows, styleWarn.Render(m.notice))
 	}
