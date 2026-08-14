@@ -66,6 +66,11 @@ sudo apt install ./dist/startnow_0.1.0_amd64.deb
 
 The package is a static, dependency-free binary installed to `/usr/bin/startnow`
 (so it works on PATH out of the box), plus a man page, desktop entry and icon.
+**It also sets up the tool path automatically**: on install, `~/.startnow/bin`
+is appended to the installing user's `~/.bashrc`/`~/.zshrc`/`~/.profile`
+(marked with `# >>> startnow PATH >>>`), and `/etc/profile.d/startnow.sh` plus
+a fish snippet cover login shells of all users. Removing the package cleans the
+marked lines back out.
 Other formats: build an RPM with `fpm -s dir -t rpm`, or write a PKGBUILD
 (`pkgver=0.1.0`, `arch=('x86_64')`, `make deb` layout) for Arch.
 

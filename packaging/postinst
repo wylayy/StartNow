@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+# StartNow postinst: expose ~/.startnow/bin on PATH.
+#
+# The package ships /etc/profile.d/startnow.sh (login shells of all users).
+# Additionally, when installed via sudo, the invoking user's shell rc files
+# get a marked export so new interactive shells pick up the tool binaries.
+
+user="${SUDO_USER:-}"
+if [ -n "$user" ]; then
+    home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6)"
+    [ -z "$home" ] && home="/home/$user"
+    for rc in "$home/.bashrc" "$home/.zshrc" "$home/.profile"; do
+        [ -f "$rc" ] || continue
+        if ! grep -q "startnow PATH" "$rc" 2>/dev/null; then
+            printf '\n# >>> startnow PATH >>>\nexport PATH="$HOME/.startnow/bin:$PATH"\n# <<< startnow PATH <<<\n' >> "$rc"
+        fi
+    done
+fi
+
+exit 0
