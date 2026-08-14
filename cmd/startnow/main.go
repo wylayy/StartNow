@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -12,6 +13,10 @@ import (
 )
 
 func main() {
+	if runtime.GOOS != "linux" {
+		fmt.Fprintf(os.Stderr, "startnow: only Linux is supported (found %s)\n", runtime.GOOS)
+		os.Exit(1)
+	}
 	env, err := installer.NewEnv(nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "startnow: %v\n", err)

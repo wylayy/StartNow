@@ -9,8 +9,8 @@ import (
 )
 
 // archiveResolver resolves the concrete asset (name, download URL, sha256)
-// for an archive tool. Version resolution is source-specific.
-type archiveResolver func(t *Tool, env *installer.Env) (asset, url, checksum string, err error)
+// and resolved version for an archive tool.
+type archiveResolver func(t *Tool, env *installer.Env) (asset, url, checksum, version string, err error)
 
 var archiveResolvers = map[Source]archiveResolver{
 	SourceGoDev:  resolveGoDev,
@@ -18,11 +18,11 @@ var archiveResolvers = map[Source]archiveResolver{
 	SourceGitHub: resolveGitHub,
 }
 
-func resolveArchive(t *Tool, env *installer.Env) (string, string, string, error) {
+func resolveArchive(t *Tool, env *installer.Env) (string, string, string, string, error) {
 	env.Report(t.Name, installer.StepResolving, 0, "resolving version")
 	r, ok := archiveResolvers[t.Source]
 	if !ok {
-		return "", "", "", fmt.Errorf("%s: no resolver for source %q", t.Name, t.Source)
+		return "", "", "", "", fmt.Errorf("%s: no resolver for source %q", t.Name, t.Source)
 	}
 	return r(t, env)
 }
@@ -93,24 +93,34 @@ func findGoFile(releases []goRelease, version, os_, arch string) (goFile, error)
 	return goFile{}, fmt.Errorf("no Go archive %s for %s/%s", version, os_, arch)
 }
 
-func resolveGoDev(t *Tool, env *installer.Env) (string, string, string, error) {
+func resolveGoDev(t *Tool, env *installer.Env) (string, string, string, string, error) {
 	var releases []goRelease
 	if err := env.FetchJSON("https://go.dev/dl/?mode=json&include=all", &releases); err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	var f goFile
+	var version string
 	var err error
 	if t.Version != "" {
 		f, err = findGoFile(releases, t.Version, goOS(), goArch())
+		version = t.Version
 	} else {
 		f, err = selectGoFile(releases, goOS(), goArch())
 	}
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
+	}
+	if version == "" {
+		for _, rel := range releases {
+			if goStableRE.MatchString(rel.Version) {
+				version = rel.Version
+				break
+			}
+		}
 	}
 	env.Report(t.Name, installer.StepResolving, 1, "resolved: "+f.Filename)
 	data := templateData(env, t, "", "", f.Filename)
-	return f.Filename, expand(t.ArchiveURL, data), f.SHA256, nil
+	return f.Filename, expand(t.ArchiveURL, data), f.SHA256, version, nil
 }
 
 // nodejs.org source.
@@ -130,27 +140,23 @@ func selectNodeLTS(entries []nodeEntry) (nodeEntry, error) {
 }
 
 func nodePlatform() (string, string) {
-	osName := "linux"
-	if goOS() == "darwin" {
-		osName = "darwin"
-	}
 	archName := "x64"
 	if goArch() == "arm64" {
 		archName = "arm64"
 	}
-	return osName, archName
+	return "linux", archName
 }
 
-func resolveNodeJS(t *Tool, env *installer.Env) (string, string, string, error) {
+func resolveNodeJS(t *Tool, env *installer.Env) (string, string, string, string, error) {
 	version := t.Version
 	if version == "" {
 		var entries []nodeEntry
 		if err := env.FetchJSON("https://nodejs.org/dist/index.json", &entries); err != nil {
-			return "", "", "", err
+			return "", "", "", "", err
 		}
 		e, err := selectNodeLTS(entries)
 		if err != nil {
-			return "", "", "", err
+			return "", "", "", "", err
 		}
 		version = e.Version
 	}
@@ -163,14 +169,14 @@ func resolveNodeJS(t *Tool, env *installer.Env) (string, string, string, error) 
 	url := expand(t.ArchiveURL, data)
 	sumsBody, err := env.Get(expand(t.ChecksumsURL, data))
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	want, err := sha256FromSums(string(sumsBody), asset)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	env.Report(t.Name, installer.StepResolving, 1, "resolved: "+asset)
-	return asset, url, want, nil
+	return asset, url, want, version, nil
 }
 
 func sha256FromSums(sums, filename string) (string, error) {
@@ -196,9 +202,7 @@ type ghAsset struct {
 }
 
 var osVariants = map[string][]string{
-	"linux":   {"linux", "Linux"},
-	"darwin":  {"darwin", "Darwin"},
-	"windows": {"windows", "Windows"},
+	"linux": {"linux", "Linux"},
 }
 
 var archVariants = map[string][]string{
@@ -226,14 +230,14 @@ func checksumAssets(t *Tool) []string {
 	return []string{"checksums.txt", "SHA256SUMS", "SHA256SUMS.txt"}
 }
 
-func resolveGitHub(t *Tool, env *installer.Env) (string, string, string, error) {
+func resolveGitHub(t *Tool, env *installer.Env) (string, string, string, string, error) {
 	apiURL := "https://api.github.com/repos/" + t.Repo + "/releases/latest"
 	if t.Version != "" {
 		apiURL = "https://api.github.com/repos/" + t.Repo + "/releases/tags/" + t.Version
 	}
 	var rel ghRelease
 	if err := env.FetchJSON(apiURL, &rel); err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	tag := rel.TagName
 	version := strings.TrimPrefix(tag, "v")
@@ -259,20 +263,20 @@ func resolveGitHub(t *Tool, env *installer.Env) (string, string, string, error) 
 		}
 	}
 	if asset == "" {
-		return "", "", "", fmt.Errorf("no asset matching %v in release %s", candidates, tag)
+		return "", "", "", "", fmt.Errorf("no asset matching %v in release %s", candidates, tag)
 	}
 	if sumsAsset == "" {
-		return "", "", "", fmt.Errorf("checksum asset not found in release %s", tag)
+		return "", "", "", "", fmt.Errorf("checksum asset not found in release %s", tag)
 	}
 	sumsBody, err := env.Get(sumsURL)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	want, err := sha256FromSums(string(sumsBody), asset)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	env.Report(t.Name, installer.StepResolving, 1, "resolved: "+tag)
 	data := templateData(env, t, version, tag, asset)
-	return asset, expand(t.ArchiveURL, data), want, nil
+	return asset, expand(t.ArchiveURL, data), want, version, nil
 }

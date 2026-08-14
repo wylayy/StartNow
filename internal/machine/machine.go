@@ -14,6 +14,7 @@ type Info struct {
 	Hostname string
 	User     string
 	OS       string
+	Distro   Distro
 	Kernel   string
 	Arch     string
 	CPUs     int
@@ -27,11 +28,12 @@ type Info struct {
 
 func Collect() Info {
 	inf := Info{
-		OS:    runtime.GOOS,
-		Arch:  runtime.GOARCH,
-		GoVer: runtime.Version(),
-		Shell: os.Getenv("SHELL"),
-		CPUs:  runtime.NumCPU(),
+		OS:     runtime.GOOS,
+		Distro: DetectDistro(),
+		Arch:   runtime.GOARCH,
+		GoVer:  runtime.Version(),
+		Shell:  os.Getenv("SHELL"),
+		CPUs:   runtime.NumCPU(),
 	}
 	if h, err := os.Hostname(); err == nil {
 		inf.Hostname = h

@@ -1,6 +1,12 @@
 package ui
 
 import (
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/lipgloss/v2"
+
 	"startnow/internal/catalog"
 	"startnow/internal/installer"
 	"startnow/internal/machine"
@@ -52,14 +58,28 @@ type Model struct {
 	selected map[string]bool
 	version  map[string]string
 
-	cursor    int
-	scroll    int
-	tab       tab
-	tabScroll int
+	managed     map[string]bool
+	manifestVer map[string]string
+	latest      map[string]string
+	updateAvail map[string]bool
+	notice      string
 
-	verTool   int
-	verBuf    string
-	verActive bool
+	table       table.Model
+	rows        []catalog.Tool
+	filterInput textinput.Model
+	verName     string
+	verInput    textinput.Model
+	spinner     spinner.Model
+	help        help.Model
+
+	details *catalog.Tool
+
+	downloadURL map[string]string
+	resolving   map[string]bool
+
+	tooSmall bool
+
+	tab tab
 
 	machine machine.Info
 	sampler *machine.Sampler
@@ -67,7 +87,6 @@ type Model struct {
 
 	screen screen
 	jobs   map[string]*job
-	spin   int
 
 	width, height int
 	quitting      bool
@@ -75,19 +94,48 @@ type Model struct {
 
 func NewModel(env *installer.Env) Model {
 	m := Model{
-		env:      env,
-		events:   make(chan installer.Event, 256),
-		tools:    catalog.Tools(),
-		state:    map[string]toolState{},
-		selected: map[string]bool{},
-		version:  map[string]string{},
-		jobs:     map[string]*job{},
-		machine:  machine.Collect(),
-		sampler:  machine.NewSampler(),
+		env:         env,
+		events:      make(chan installer.Event, 256),
+		tools:       catalog.Tools(),
+		state:       map[string]toolState{},
+		selected:    map[string]bool{},
+		version:     map[string]string{},
+		managed:     map[string]bool{},
+		manifestVer: map[string]string{},
+		latest:      map[string]string{},
+		updateAvail: map[string]bool{},
+		downloadURL: map[string]string{},
+		resolving:   map[string]bool{},
+		jobs:        map[string]*job{},
+		machine:     machine.Collect(),
+		sampler:     machine.NewSampler(),
 	}
 	env.Send = func(ev installer.Event) { m.events <- ev }
+	if manifest, err := env.LoadManifest(); err == nil {
+		for name, entry := range manifest.Installs {
+			m.managed[name] = true
+			m.manifestVer[name] = entry.Version
+		}
+	}
 	m.usage = m.sampler.Sample()
 	m.probeAll()
+
+	m.rows = append([]catalog.Tool(nil), m.tools...)
+	m.table = newToolsTable()
+	m.syncTableRows()
+
+	m.filterInput = textinput.New()
+	m.filterInput.Placeholder = "filter…"
+	m.filterInput.CharLimit = 40
+	m.filterInput.Prompt = ""
+
+	m.verInput = textinput.New()
+	m.verInput.Placeholder = "e.g. 1.26.5 — empty for latest"
+	m.verInput.CharLimit = 40
+	m.verInput.Prompt = ""
+
+	m.spinner = spinner.New(spinner.WithSpinner(spinner.Line), spinner.WithStyle(lipgloss.NewStyle().Foreground(accent)))
+	m.help = help.New()
 	return m
 }
 
@@ -103,9 +151,14 @@ func (m *Model) probeAll() {
 
 func (m *Model) runInstall(t catalog.Tool) {
 	t.Version = m.version[t.Name]
-	if err := catalog.Install(&t, m.env); err != nil {
+	version, err := catalog.Install(&t, m.env)
+	if err != nil {
 		m.env.Send(installer.Event{Tool: t.Name, Step: installer.StepFailed, Message: err.Error()})
 		return
 	}
-	m.env.Send(installer.Event{Tool: t.Name, Step: installer.StepDone, Progress: 1, Message: "installed"})
+	if err := m.env.RecordInstall(t.Name, version); err != nil {
+		m.env.Send(installer.Event{Tool: t.Name, Step: installer.StepFailed, Message: "manifest update failed: " + err.Error()})
+		return
+	}
+	m.env.Send(installer.Event{Tool: t.Name, Step: installer.StepDone, Progress: 1, Message: "installed", Version: version})
 }

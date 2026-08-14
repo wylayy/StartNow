@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"startnow/internal/machine"
 )
 
 type Step int
@@ -54,6 +56,7 @@ type Event struct {
 	Step     Step
 	Progress float64
 	Message  string
+	Version  string
 }
 
 type Env struct {
@@ -61,6 +64,11 @@ type Env struct {
 	BinDir string
 	Cache  string
 	Send   func(Event)
+	Distro machine.Distro
+	Sudo   string
+	PkgMgr *PkgManager
+
+	mu sync.Mutex // guards manifest file access
 }
 
 func NewEnv(send func(Event)) (*Env, error) {
@@ -72,7 +80,10 @@ func NewEnv(send func(Event)) (*Env, error) {
 		Prefix: filepath.Join(home, ".startnow"),
 		Cache:  filepath.Join(home, ".cache", "startnow"),
 		Send:   send,
+		Distro: machine.DetectDistro(),
 	}
+	env.Sudo = env.sudoStatus()
+	env.PkgMgr = DetectPkgManager(env.Distro)
 	env.BinDir = filepath.Join(env.Prefix, "bin")
 	for _, d := range []string{env.Prefix, env.BinDir, env.Cache} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
@@ -235,8 +246,21 @@ func (e *Env) LinkIntoBin(tool, dir string) error {
 }
 
 func (e *Env) RunScript(tool, script string, args, extraEnv []string) error {
-	e.Report(tool, StepInstalling, 0, "running installer script")
-	cmd := exec.Command("bash", append([]string{script}, args...)...)
+	return e.runStreamed(tool, "bash", append([]string{script}, args...), extraEnv)
+}
+
+// RunCommand runs an external command (e.g. a package manager) with output
+// streamed as events.
+func (e *Env) RunCommand(tool string, args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("empty command")
+	}
+	return e.runStreamed(tool, args[0], args[1:], nil)
+}
+
+func (e *Env) runStreamed(tool, name string, args, extraEnv []string) error {
+	e.Report(tool, StepInstalling, 0, "running "+name)
+	cmd := exec.Command(name, args...)
 	cmd.Env = append(os.Environ(), extraEnv...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
